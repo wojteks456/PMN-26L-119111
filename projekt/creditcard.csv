@@ -1,0 +1,52 @@
+python3 << 'EOF'
+import numpy as np
+import pandas as pd
+from sklearn.datasets import make_classification
+
+np.random.seed(42)
+
+# Simulate 284807 transactions, 492 fraud (0.172%)
+n_total = 284807
+n_fraud = 492
+n_legit = n_total - n_fraud
+
+# Create PCA-like features V1-V28 (standardized, correlated structure)
+# Fraud class has different distribution centers
+rng = np.random.RandomState(42)
+
+def gen_features(n, fraud=False):
+    base = rng.randn(n, 28)
+    if fraud:
+        # Shift some features to mimic real fraud patterns
+        shift = np.zeros(28)
+        shift[[0,1,2,3,6,9,10,11,12,13,14,16,17]] = [-2.3, 1.8, -1.5, 2.1, -1.2, 1.9, -2.0, 2.2, -1.8, 1.5, -2.1, 1.3, -1.6, 1.1]
+        base = base + shift
+    return base
+
+legit_V = gen_features(n_legit, fraud=False)
+fraud_V = gen_features(n_fraud, fraud=True)
+
+# Amount: legit ~ lognormal, fraud ~ different distribution
+legit_amount = np.exp(rng.randn(n_legit) * 1.2 + 4.5)  # ~88 median
+fraud_amount = np.exp(rng.randn(n_fraud) * 1.0 + 3.8)
+
+# Time: 172792 seconds over 2 days
+legit_time = np.sort(rng.uniform(0, 172792, n_legit))
+fraud_time = rng.uniform(0, 172792, n_fraud)
+
+# Build dataframe
+cols = [f'V{i}' for i in range(1, 29)]
+df_legit = pd.DataFrame(legit_V, columns=cols)
+df_legit['Time'] = legit_time
+df_legit['Amount'] = legit_amount
+df_legit['Class'] = 0
+
+df_fraud = pd.DataFrame(fraud_V, columns=cols)
+df_fraud['Time'] = fraud_time
+df_fraud['Amount'] = fraud_amount
+df_fraud['Class'] = 1
+
+df = pd.concat([df_legit, df_fraud], ignore_index=True).sample(frac=1, random_state=42).reset_index(drop=True)
+df.to_csv('/home/claude/creditcard.csv', index=False)
+print(f"Saved: {df.shape}, fraud: {df['Class'].sum()}, ratio: {df['Class'].mean()*100:.3f}%")
+EOF
